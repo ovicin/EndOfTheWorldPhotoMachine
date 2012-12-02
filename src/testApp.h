@@ -7,6 +7,8 @@
 #include "ofMain.h"
 #include "DSLRRemoteLib.h"
 
+//#define CALIBRATION_MODE
+#define Y_THRESHOLD -450
 
 /* App States */
 
@@ -16,9 +18,17 @@
 #define DISPLAY_PHOTO_STATE 4
 #define ERROR_STATE 5
 
-/* Conters */
+/* Counters */
 #define END_OF_THE_WORLD 10 /* seconds */
 #define PHOTO_DISPLAY_TIME 10 /*seconds*/
+
+/* Define the max no of users MAX_NUMBER_USERS 8 */
+#define NO_OF_USERS 1
+
+typedef struct{
+	bool UsersTracked;
+	bool AllUsersInsideHotSpot;
+} UsersStatus;
 
 class testApp : public ofBaseApp{
 
@@ -44,8 +54,9 @@ public:
 	void ChangeToDisplayCounter(void);
 	void ChangeToDisplayPhoto(void);
 	void ChangeToTakePhoto(void);
+	UsersStatus UpdateUsersStatus(void);
 
-	bool				isLive, isTracking, isRecording, isCloud, isCPBkgnd, isMasking;
+	bool				isLive, isTracking, isRecording, isCloud, isCPBkgnd, isMasking,takePhoto;
 	bool				isTrackingHands, isFiltering;
 	int globalCounter;
 	ofxOpenNIContext	recordContext, playContext;

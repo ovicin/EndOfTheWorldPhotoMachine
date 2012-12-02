@@ -10,7 +10,7 @@ void testApp::setup() {
 	isFiltering		= false;
 	isRecording		= false;
 	isCloud			= false;
-	isCPBkgnd		= true;
+	isCPBkgnd		= false;
 	isMasking		= false;
 
 	nearThreshold = 500;
@@ -20,13 +20,14 @@ void testApp::setup() {
 
 	setupRecording();
 
+	ofSetFullscreen(true);
+
 	ofBackground(0, 0, 0);
 
 	CurrentState = DISPLAY_PHOTO_STATE;
-	// = "c:/DSlrRemote/2012-10-28/IMG_0007.JPG";
-
-	getReadyMovie.loadMovie("movies/fingers.mov");
-	getReadyMovie.play();
+	ofSetVerticalSync(false); 
+				getReadyMovie.loadMovie("movies/duck and cover.mov");
+	//getReadyMovie.play();
 }
 
 void testApp::setupRecording(string _filename) {
@@ -45,15 +46,15 @@ void testApp::setupRecording(string _filename) {
 	recordUser.setSmoothing(filterFactor);				// built in openni skeleton smoothing...
 	recordUser.setUseMaskPixels(isMasking);
 	recordUser.setUseCloudPoints(isCloud);
-	recordUser.setMaxNumberOfUsers(2);					// use this to set dynamic max number of users (NB: that a hard upper limit is defined by MAX_NUMBER_USERS in ofxUserGenerator)
+	recordUser.setMaxNumberOfUsers(NO_OF_USERS);					// use this to set dynamic max number of users (NB: that a hard upper limit is defined by MAX_NUMBER_USERS in ofxUserGenerator)
 
-	recordHandTracker.setup(&recordContext, 4);
+	recordHandTracker.setup(&recordContext, 1);
 	recordHandTracker.setSmoothing(filterFactor);		// built in openni hand track smoothing...
 	recordHandTracker.setFilterFactors(filterFactor);	// custom smoothing/filtering (can also set per hand with setFilterFactor)...set them all to 0.1f to begin with
 
 	recordContext.toggleRegisterViewport();
 	recordContext.toggleMirror();
-
+	
 	oniRecorder.setup(&recordContext, ONI_STREAMING);
 	//oniRecorder.setup(&recordContext, ONI_CYCLIC, 60);
 	//read the warning in ofxOpenNIRecorder about memory usage with ONI_CYCLIC recording!!!
@@ -141,7 +142,7 @@ void testApp::draw(){
 	ofSetColor(255, 255, 255);
 
 	glPushMatrix();
-	glScalef(0.75, 0.75, 0.75);
+	//glScalef(0.75, 0.75, 0.75);
 
 #if 0
 
@@ -320,7 +321,8 @@ void testApp::keyPressed(int key){
 			break;
 		case 't':
 		case 'T':
-			isTracking = !isTracking;
+			//isTracking = !isTracking;
+			takePhoto = true;
 			break;
 		case 'h':
 		case 'H':
@@ -477,25 +479,54 @@ void testApp::windowResized(int w, int h){
 
 }
 
+UsersStatus testApp::UpdateUsersStatus(void)
+{
+	UsersStatus retVal;
+    /* get user 1(update this to check all the users, create an array maybe)*/
+	ofxTrackedUser* tracked = recordUser.getTrackedUser(1);
+	XnPoint3D center;
+	
+	//recordUser.update();
+	/* Initialize the retVal */
+	retVal.AllUsersInsideHotSpot = false;
+	retVal.UsersTracked = false;
+
+	/* update users tracked status */
+
+	if (tracked != NULL)
+		retVal.UsersTracked = true;
+
+	/* update users inside hotspot status */
+
+	center = tracked->center;
+	if((tracked != NULL) && (center.Y < Y_THRESHOLD) && (center.Y > -600))
+		retVal.AllUsersInsideHotSpot = true;
+	else
+		if(takePhoto==true)
+		{
+			retVal.AllUsersInsideHotSpot = true;
+			takePhoto=false;
+		}
+	return retVal;
+
+}
 
 void testApp::StateMachineUpdate(void)
 {
 	float elapsedTime;
-	/* get user 1(update this to check all the users, create an array maybe)*/
-	ofxTrackedUser* tracked = recordUser.getTrackedUser(1);
+	UsersStatus myUsersStatus;
+
+	myUsersStatus = UpdateUsersStatus();
 
 	
 	switch(CurrentState)
 			{
 			case TRACK_USERS_STATE:
 				//cout << "DEBUG: Entered track user state";
-				XnPoint3D center;
-
-				center = tracked->center;
+				
 				/* when the users are inside the hotspot switch to the DISPLAY_COUNTER_STATE */
 				
-				if(center.Y < -400)
-					
+				if (myUsersStatus.AllUsersInsideHotSpot)					
 					ChangeToDisplayCounter();
 				break;
 			case DISPLAY_COUNTER_STATE:
@@ -542,8 +573,14 @@ void testApp::StateMachineUpdate(void)
 				//cout << "DEBUG: Entered display photo state";
 				/*if the photo display time elapsed and the no of users > 0 go to the track user state */
 				elapsedTime = ofGetElapsedTimef() - DisplayPhotoInitTime;
-				if ((((float)PHOTO_DISPLAY_TIME - elapsedTime)<0) && (tracked != NULL))
+				//myUsersStatus.UsersTracked
+				if (((float)PHOTO_DISPLAY_TIME - elapsedTime)<0)
+				{
+					//recordUser.startTracking(1);
+					//setup();
+					//recordUser.requestCalibration(1);
 					CurrentState = TRACK_USERS_STATE;
+				}
 				break;
 			case ERROR_STATE:
 				
@@ -556,34 +593,53 @@ void testApp::StateMachineUpdate(void)
 void testApp::StateMachineDraw(void)
 {	
 	float elapsedTime;
-	ofTrueTypeFont vagRounded;
-	vagRounded.loadFont("vag.ttf", 16);
+	ofTrueTypeFont vagRounded,big;
+	vagRounded.loadFont("vag.ttf", 40);
+	big.loadFont("vag.ttf", 400);
+#ifdef CALIBRATION_MODE 
+	ofxTrackedUser* tracked = recordUser.getTrackedUser(1);
+	XnPoint3D center;
+#endif
 	switch(CurrentState)
 			{
 			case TRACK_USERS_STATE:
-				vagRounded.drawString("Put the bag on your head and jump under the table. End of the world is close", -100 + ofGetWidth()/2, ofGetHeight() - 40);
-				vagRounded.drawString("Track User State - Display instructions", -100 + ofGetWidth()/2, ofGetHeight() - 10);
+				//vagRounded.drawString("Put the bag on your head and jump under the table. End of the world is close", -100 + ofGetWidth()/2, ofGetHeight() - 40);
+				//vagRounded.drawString("Track User State - Display instructions", -100 + ofGetWidth()/2, ofGetHeight() - 10);
+				#ifndef CALIBRATION_MODE
+	
+				getReadyMovie.play();
 				getReadyMovie.update();
-				getReadyMovie.draw(20,20);
+				getReadyMovie.draw(0,0,ofGetWidth(),ofGetHeight());
+				
+				#endif
+				
+				#ifdef CALIBRATION_MODE
+				center = tracked->center;
+				vagRounded.drawString(ofToString(center.Y), -100 + ofGetWidth()/2, ofGetHeight() - 40);
+				#endif
 				break;
+
 			case DISPLAY_COUNTER_STATE:
 				
 				elapsedTime = ofGetElapsedTimef() - DisplayCounterInitTime;
 				
-				vagRounded.drawString("END OF THE WORLD IN:", -100 + ofGetWidth()/2, ofGetHeight() - 30);
-				vagRounded.drawString(ofToString((int)((float)END_OF_THE_WORLD - elapsedTime)), -100 + ofGetWidth()/2, ofGetHeight() - 10);			
+				vagRounded.drawString("DUCK AND COVER\nTHE END WILL COME IN:", -200 + ofGetWidth()/2, 100);
+				big.drawString(ofToString((int)((float)END_OF_THE_WORLD - elapsedTime)), -120 + ofGetWidth()/2, ofGetHeight() - 80);			
 
 				break;
+
 			case TAKE_PHOTO_STATE:
-				vagRounded.drawString("Take Photo State", -100 + ofGetWidth()/2, ofGetHeight() - 10);
+				//vagRounded.drawString("Take Photo State", -100 + ofGetWidth()/2, ofGetHeight() - 10);
 				break;
+
 			case DISPLAY_PHOTO_STATE:
 				photo.loadImage(PhotoFilename);
-				photo.resize(1280,720);
+				photo.resize(ofGetWidth(),ofGetHeight());
 				photo.draw(0,0);
 				/*if the photo display time elapsed and the no of users > 0 go to the track user state */
 
 				break;
+
 			case ERROR_STATE:
 				vagRounded.drawString("Error State", -100 + ofGetWidth()/2, ofGetHeight() - 10);
 				break;
